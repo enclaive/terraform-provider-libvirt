@@ -1,7 +1,8 @@
 # Terraform provider for Libvirt confidential Virtual Machines
 
 This is a terraform provider that lets you provision
-servers on a [libvirt](https://libvirt.org/) host via [Terraform](https://terraform.io/). Great emphasis is given to confidential VMs.
+servers on a [libvirt](https://libvirt.org/) host via [Terraform](https://terraform.io/). 
+Much emphasis is given to confidential VMs, following the [confidential computing](https://en.wikipedia.org/wiki/Confidential_computing) paradigm.
 
 ## Introduction & Goals
 
@@ -23,7 +24,7 @@ In your `main.tf` file, specify the version you want to use:
 terraform {
   required_providers {
     libvirt = {
-      source = "dmacvicar/libvirt"
+      source = "enclaive/libvirt"
     }
   }
 }
