@@ -1,42 +1,15 @@
-> [!NOTE]
-> This project is maintained on a best effort basis. I am not actively working on it.
->
-> From time to time I go over interesting PRs and do minor improvements.
->
-> New features are, by default not welcomed or accepted unless discussed and agreed upon.
->
-> If you are willing to contribute, this is what the project accepts as contributions:
->
-> - maintainers, who take over an area and actively keep the code in good shape
-> - improvements to testing, including enabling the acceptance testsuite in CI
-> - modernizing the codebase and removing exceptions from the linters
-> - writing v2, simplified versions of the resources
-
 # Terraform provider for libvirt
 
-- [![Gitter chat](https://badges.gitter.im/terraform-provider-libvirt/Lobby.png)](https://gitter.im/terraform-provider-libvirt/Lobby) ([IRC gateway](https://irc.gitter.im/))
-- Planning board: [Github Projects](https://github.com/dmacvicar/terraform-provider-libvirt/projects/1)
-
-
-![alpha](https://img.shields.io/badge/stability%3F-beta-yellow.svg) [![Tests](https://github.com/dmacvicar/terraform-provider-libvirt/actions/workflows/test.yml/badge.svg)](https://github.com/dmacvicar/terraform-provider-libvirt/actions/workflows/test.yml) [![Registry](https://img.shields.io/badge/libvirt-Terraform%20Registry-blue)](https://registry.terraform.io/providers/dmacvicar/libvirt/latest/docs)
-
-___
 This is a terraform provider that lets you provision
-servers on a [libvirt](https://libvirt.org/) host via [Terraform](https://terraform.io/).
+servers on a [libvirt](https://libvirt.org/) host via [Terraform](https://terraform.io/). Great emphasis is given to confidential VMs, supporting AMD SEV-SNP and Intel TDX. 
 
 ## Introduction & Goals
 
-This project exists:
+Confidential virtualization is an emerging technology that enhances the security of virtual machines (VMs) by isolating their memory and execution from the host and other VMs—even with privileged system software. This is achieved using hardware-backed techniques such as AMD SEV-SNP, ensuring that sensitive workloads remain protected from potentially compromised hypervisors or infrastructure administrators. Confidential VMs are critical for organizations that need to safeguard data-in-use and maintain strong security guarantees in cloud or on-premises environments.
 
-* To allow teams to get the benefits [Software Defined Infrastructure](https://en.wikipedia.org/wiki/Software-defined_infrastructure) Terraform provides, on top of classical and cheap virtualization infrastructure provided by Linux and [KVM](https://www.linux-kvm.org)
-  This helps in very dynamic [DevOps](https://en.wikipedia.org/wiki/DevOps), Development and Testing activities.
-* To allow for mixing KVM resources with other infrastructure Terraform is able to manage
+The goal of this project is to maintain a Terraform provider that enables users to provision confidential virtual machines (VMs) on KVM-based infrastructure. By leveraging modern confidential computing features, this provider allows teams to automate and manage confidential workloads with Terraform, benefiting from software-defined infrastructure practices while maintaining robust security for sensitive data.
 
-What is *NOT* in scope:
-
-* To support every advanced feature [libvirt](https://libvirt.org/) supports
-
-  This would make the mapping from terraform complicated and not maintainable. See the [How to contribute](CONTRIBUTING.md) section to understand how to approach new features.
+Currently, the provider supports provisioning confidential VMs using AMD SEV-SNP with Linux’s KVM and libvirt.
 
 ## Getting started
 
