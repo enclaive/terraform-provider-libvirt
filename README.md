@@ -1,7 +1,7 @@
-# Terraform provider for libvirt
+# Terraform provider for Libvirt confidential Virtual Machines
 
 This is a terraform provider that lets you provision
-servers on a [libvirt](https://libvirt.org/) host via [Terraform](https://terraform.io/). Great emphasis is given to confidential VMs, supporting AMD SEV-SNP and Intel TDX. 
+servers on a [libvirt](https://libvirt.org/) host via [Terraform](https://terraform.io/). Great emphasis is given to confidential VMs.
 
 ## Introduction & Goals
 
@@ -9,7 +9,9 @@ Confidential virtualization is an emerging technology that enhances the security
 
 The goal of this project is to maintain a Terraform provider that enables users to provision confidential virtual machines (VMs) on KVM-based infrastructure. By leveraging modern confidential computing features, this provider allows teams to automate and manage confidential workloads with Terraform, benefiting from software-defined infrastructure practices while maintaining robust security for sensitive data.
 
-Currently, the provider supports provisioning confidential VMs using AMD SEV-SNP with Linux’s KVM and libvirt.
+Currently, the provider supports provisioning confidential VMs using 
+- [x] AMD SEV-SNP 
+- [ ] Intel TDX
 
 ## Getting started
 
@@ -73,14 +75,14 @@ Look at more advanced examples [here](examples/) and check the [documentation](h
 
 ## Manual installation
 
-You can also manually download the provider from the [releases section](https://github.com/dmacvicar/terraform-provider-libvirt/releases) on Github. To install it, refer to the [Terraform documentation](https://www.terraform.io/docs/cli/config/config-file.html#provider-installation).
+You can also manually download the provider from the [releases section](https://github.com/enclaive/terraform-provider-libvirt/releases) on Github. To install it, refer to the [Terraform documentation](https://www.terraform.io/docs/cli/config/config-file.html#provider-installation).
 
 ## Building from source
 
 -	[Go](https://golang.org/doc/install) is required for building.
 
 ```bash
-git clone https://github.com/dmacvicar/terraform-provider-libvirt.git
+git clone https://github.com/enclaive/terraform-provider-libvirt.git
 cd terraform-provider-libvirt
 make
 ```
@@ -128,14 +130,8 @@ Be aware that this variables may be subject to change again in future versions.
   
 * [Kubitect](https://github.com/MusicDin/kubitect) - a CLI tool for deploying and managing Kubernetes clusters on libvirt platform.
 
-## Authors
+## Acknowledgement
 
-* Duncan Mac-Vicar P. <duncan@mac-vicar.eu>
+Big shout out to * Duncan Mac-Vicar P. <duncan@mac-vicar.eu> who initiated this [project](https://github.com/dmacvicar/terraform-provider-libvirt). The structure and boilerplate is inspired from the [Softlayer](https://github.com/finn-no/terraform-provider-softlayer) and [Google](https://github.com/terraform-providers/terraform-provider-google) Terraform provider sources.
 
-See also the list of [contributors](https://github.com/dmacvicar/terraform-provider-libvirt/graphs/contributors) who participated in this project.
 
-The structure and boilerplate is inspired from the [Softlayer](https://github.com/finn-no/terraform-provider-softlayer) and [Google](https://github.com/terraform-providers/terraform-provider-google) Terraform provider sources.
-
-## License
-
-* Apache 2.0, See LICENSE file
