@@ -56,6 +56,12 @@ resource "libvirt_domain" "domain-ubuntu" {
 
   network_interface {
     network_name = "default"
+    # Apply a network filter to the interface for traffic control
+    filter = "clean-traffic"        # Name of the nwfilter to use
+    # Optional parameters for the filter, e.g. expected IP addresses to enhance anti-spoofing
+    filter_parameters = {
+      IP = "10.0.0.5"               # Expected IP address of the VM's interface
+    }
   }
 
   # IMPORTANT: this is a known bug on cloud images, since they expect a console

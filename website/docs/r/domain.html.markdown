@@ -65,6 +65,7 @@ The following arguments are supported:
 * `qemu_agent` (Optional) By default is disabled, set to true for enabling it. More info [qemu-agent](https://wiki.libvirt.org/page/Qemu_guest_agent).
 * `tpm` (Optional) TPM device to attach to the domain. The `tpm` object structure is documented [below](#tpm-device).
 * `type` (Optional) The type of hypervisor to use for the domain.  Defaults to `kvm`, other values can be found [here](https://libvirt.org/formatdomain.html#id1)
+* `memory_backing` (Optional) Configures how memory is managed for the domain. The `memory_backing` object structure is documented [below](#memory-backing).
 ### Kernel and boot arguments
 
 * `kernel` - (Optional) The path of the kernel to boot
@@ -157,10 +158,16 @@ resource "libvirt_domain" "my_machine" {
 
 Some extra arguments are also provided for using UEFI images:
 
-* `firmware` - (Optional) The UEFI rom images for exercising UEFI secure boot in a qemu
-environment. Users should usually specify one of the standard _Open Virtual Machine
-Firmware_ (_OVMF_) images available for their distributions. The file will be opened
-read-only.
+* `firmware_config` - (Optional) A block defining detailed configuration for the firmware. The following arguments are supported:
+  * `path` - (Required) Path to the firmware file. Users should usually specify one of the standard _Open Virtual Machine Firmware_ (_OVMF_) images available for their distributions.
+  * `readonly` - (Optional) Whether the firmware should be read-only. Default is `true`.
+  * `type` - (Optional) Type of firmware. Default is `pflash`, which is typically used for UEFI.
+  * `secure` - (Optional) Enable secure boot. Default is `false`.
+
+* `firmware` - (Optional, Deprecated) The UEFI rom images for exercising UEFI secure boot in a qemu
+environment. Use `firmware_config` block instead for more configuration options. Users should usually 
+specify one of the standard _Open Virtual Machine Firmware_ (_OVMF_) images available for their 
+distributions. The file will be opened read-only.
 * `nvram` - (Optional) this block allows specifying the following attributes related to the _nvram_:
   * `file` - path to the file backing the NVRAM store for non-volatile variables. When provided,
   this file must be writable and specific to this domain, as it will be updated when running the
@@ -199,6 +206,33 @@ look like this:
 ```hcl
 resource "libvirt_domain" "my_machine" {
   name     = "my_machine"
+  
+  # New recommended way to configure firmware
+  firmware_config {
+    path     = "/usr/share/qemu/ovmf-x86_64-code.bin"
+    readonly = true
+    type     = "pflash"
+    secure   = false
+  }
+  
+  nvram {
+    file = "/usr/local/share/qemu/custom-vars.bin"
+  }
+  memory = "2048"
+
+  disk {
+    volume_id = libvirt_volume.volume.id
+  }
+  ...
+}
+
+```
+
+Or using the legacy method (deprecated):
+
+```hcl
+resource "libvirt_domain" "my_machine" {
+  name     = "my_machine"
   firmware = "/usr/share/qemu/ovmf-x86_64-code.bin"
   nvram {
     file = "/usr/local/share/qemu/custom-vars.bin"
@@ -219,7 +253,13 @@ coming from a template, the domain definition should look like this:
 ```hcl
 resource "libvirt_domain" "my_machine" {
   name     = "my_machine"
-  firmware = "/usr/share/qemu/ovmf-x86_64-code.bin"
+  
+  firmware_config {
+    path     = "/usr/share/qemu/ovmf-x86_64-code.bin"
+    readonly = true
+    type     = "pflash"
+  }
+  
   nvram {
     file = "/usr/local/share/qemu/custom-vars.bin"
     template = "/usr/local/share/qemu/template-vars.bin"
@@ -335,6 +375,10 @@ resource "libvirt_domain" "domain1" {
     addresses      = ["10.17.3.3"]
     mac            = "AA:BB:CC:11:22:22"
     wait_for_lease = true
+    filter         = "clean_traffic"
+    filter_parameters = {
+      IP = "10.0.0.5"
+    }
   }
 }
 ```
@@ -355,6 +399,17 @@ When using a virtual network, users can specify:
 * `wait_for_lease`- (Optional boolean) When creating the domain resource, wait until the
   network interface gets a DHCP lease from libvirt, so that the computed IP
   addresses will be available when the domain is up and the plan applied.
+* `filter` - (Optional) The name of a libvirt network filter (nwfilter) to apply
+on this interface. Network filters can be used to restrict or shape network
+traffic, for example by preventing MAC or IP spoofing.
+
+* `filter_parameters` - (Optional) A map of parameters to customize the behavior
+of the network filter. For example, specifying the expected IP address for
+anti-spoofing.
+
+**Note:** Currently, network filters must be created manually using libvirt tools
+or XML configurations. Terraform support to create and manage nwfilters directly
+is planned for a future release.
 
 When connecting to a LAN, users can specify a target device with:
 
@@ -590,6 +645,101 @@ Additional attributes when `backend_type` is "emulator":
 * `backend_encryption_secret` - (Optional) [Secret object](https://libvirt.org/formatsecret.html) for encrypting the TPM state
 * `backend_version` - (Optional) TPM version
 * `backend_persistent_state` - (Optional) Keep the TPM state when a transient domain is powered off or undefined
+
+### Memory Backing
+
+The optional `memory_backing` block allows you to configure how memory is managed for the domain:
+
+```hcl
+resource "libvirt_domain" "domain" {
+  # ...
+  
+  memory_backing {
+    source_type = "memfd"
+    access_mode = "shared"
+    allocation_mode = "immediate"
+    discard = true
+    locked = true
+    
+    hugepages {
+      size = 2048
+      nodeset = "0-3"
+    }
+  }
+}
+```
+
+Attributes:
+
+* `source_type` - (Optional) The memory backing source type. Can be one of:
+  * `file` - Memory is backed by files on the host
+  * `anonymous` - Memory is backed by anonymous memory
+  * `memfd` - Memory is backed by memory file descriptors (memfd)
+
+* `access_mode` - (Optional) Memory access mode. Can be one of:
+  * `shared` - Memory can be shared between guests
+  * `private` - Memory is private to this guest
+
+* `allocation_mode` - (Optional) Memory allocation mode. Can be one of:
+  * `immediate` - All memory is allocated upfront
+  * `ondemand` - Memory is allocated as needed
+
+* `discard` - (Optional) Enable memory discard (return unused memory to the host)
+
+* `nosharepages` - (Optional) Disable memory sharing between guests
+
+* `locked` - (Optional) Lock memory to prevent swapping
+
+* `hugepages` - (Optional) Configure huge pages for the domain
+  * `size` - (Required) Huge page size in KiB
+  * `nodeset` - (Optional) NUMA nodes to allocate huge pages from
+
+### Launch Security
+
+The `launch_security` block allows configuring secure boot features:
+
+```hcl
+resource "libvirt_domain" "domain" {
+  # ...
+  
+  launch_security {
+    type = "sev"
+    cbitpos = 47
+    reduced_phys_bits = 1
+    policy = 3
+  }
+}
+```
+
+* `type` - (Required) The launch security type. Can be one of:
+  * `sev` - AMD Secure Encrypted Virtualization
+  * `sev-snp` - AMD SEV with Secure Nested Paging
+  * `s390-pv` - IBM S390 Protected Virtualization
+
+#### SEV Specific Settings
+
+These settings apply when `type` is set to `sev`:
+
+* `cbitpos` - (Optional) The C-bit position value
+* `reduced_phys_bits` - (Optional) The number of reduced physical address bits
+* `policy` - (Optional) The policy value
+* `dh_cert` - (Optional) The Diffie-Hellman certificate
+* `session` - (Optional) The session information
+
+#### SEV-SNP Specific Settings
+
+These settings apply when `type` is set to `sev-snp`:
+
+* `kernel_hashes` - (Optional) The kernel hashes
+* `author_key` - (Optional) The author key
+* `vcek` - (Optional) The VCEK value
+* `cbitpos` - (Optional) The C-bit position value
+* `reduced_phys_bits` - (Optional) The number of reduced physical address bits
+* `policy` - (Optional) The policy value
+* `guest_visible_workarounds` - (Optional) Guest visible workarounds
+* `id_block` - (Optional) The ID block
+* `id_auth` - (Optional) The ID auth
+* `host_data` - (Optional) The host data
 
 ### Altering libvirt's generated domain XML definition
 
