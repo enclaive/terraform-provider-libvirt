@@ -1857,3 +1857,176 @@ func TestAccLibvirtDomain_FwCfgName(t *testing.T) {
 		},
 	})
 }
+func TestAccLibvirtDomain_LaunchSecuritySEV(t *testing.T) {
+	var domain libvirt.Domain
+	randomDomainName := acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
+
+	config := fmt.Sprintf(`
+	resource "libvirt_domain" "%s" {
+		name = "%s"
+		launch_security {
+			type = "sev"
+			cbitpos = 47
+			reduced_phys_bits = 1
+			policy = 3
+		}
+	}`, randomDomainName, randomDomainName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLibvirtDomainDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLibvirtDomainExists("libvirt_domain."+randomDomainName, &domain),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "launch_security.0.type", "sev"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "launch_security.0.cbitpos", "47"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "launch_security.0.reduced_phys_bits", "1"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "launch_security.0.policy", "3"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccLibvirtDomain_LaunchSecuritySEV_SNP(t *testing.T) {
+	var domain libvirt.Domain
+	randomDomainName := acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
+
+	config := fmt.Sprintf(`
+	resource "libvirt_domain" "%s" {
+		name = "%s"
+		launch_security {
+			type = "sev-snp"
+			cbitpos = 51
+			reduced_phys_bits = 1
+			policy = 3
+		}
+	}`, randomDomainName, randomDomainName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLibvirtDomainDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLibvirtDomainExists("libvirt_domain."+randomDomainName, &domain),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "launch_security.0.type", "sev-snp"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "launch_security.0.cbitpos", "51"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "launch_security.0.reduced_phys_bits", "1"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "launch_security.0.policy", "3"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccLibvirtDomain_MemoryBacking(t *testing.T) {
+	var domain libvirt.Domain
+	randomDomainName := acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
+
+	config := fmt.Sprintf(`
+	resource "libvirt_domain" "%s" {
+		name = "%s"
+		memory_backing {
+			source_type = "memfd"
+			access_mode = "shared"
+			allocation_mode = "immediate"
+			discard = true
+			nosharepages = true
+			locked = true
+			hugepages {
+				size = 2048
+				nodeset = "0"
+			}
+		}
+	}`, randomDomainName, randomDomainName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLibvirtDomainDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLibvirtDomainExists("libvirt_domain."+randomDomainName, &domain),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "memory_backing.0.source_type", "memfd"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "memory_backing.0.access_mode", "shared"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "memory_backing.0.allocation_mode", "immediate"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "memory_backing.0.discard", "true"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "memory_backing.0.nosharepages", "true"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "memory_backing.0.locked", "true"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "memory_backing.0.hugepages.0.size", "2048"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "memory_backing.0.hugepages.0.nodeset", "0"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccLibvirtDomain_FirmwareConfig(t *testing.T) {
+	firmware := "/usr/share/qemu/ovmf-x86_64-code.bin"
+	if _, err := os.Stat(firmware); os.IsNotExist(err) {
+		firmware = "/usr/share/ovmf/OVMF.fd"
+		if _, err := os.Stat(firmware); os.IsNotExist(err) {
+			t.Skipf("Can't test domain custom firmware: OVMF firmware not found: %s", err)
+		}
+	}
+
+	var domain libvirt.Domain
+	randomDomainName := acctest.RandStringFromCharSet(10, acctest.CharSetAlpha)
+
+	config := fmt.Sprintf(`
+	resource "libvirt_domain" "%s" {
+		name = "%s"
+		firmware_config {
+			path = "%s"
+			readonly = false
+			type = "pflash"
+			secure = true
+		}
+	}`, randomDomainName, randomDomainName, firmware)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLibvirtDomainDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLibvirtDomainExists("libvirt_domain."+randomDomainName, &domain),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "firmware_config.0.path", firmware),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "firmware_config.0.readonly", "false"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "firmware_config.0.type", "pflash"),
+					resource.TestCheckResourceAttr(
+						"libvirt_domain."+randomDomainName, "firmware_config.0.secure", "true"),
+				),
+			},
+		},
+	})
+}

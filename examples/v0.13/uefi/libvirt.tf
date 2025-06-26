@@ -29,9 +29,21 @@ resource "libvirt_domain" "domain" {
   memory = "512"
   vcpu   = 1
 
-  # This file is usually present as part of the ovmf firmware package in many
-  # Linux distributions.
-  firmware = "/usr/share/OVMF/OVMF_CODE.fd"
+  # The new firmware_config block allows detailed configuration of UEFI firmware.
+  # This replaces the old firmware string attribute.
+  firmware_config {
+    # Path to the firmware file (usually present as part of the ovmf firmware package)
+    path = "/usr/share/OVMF/OVMF_CODE.fd"
+    # Whether the firmware should be read-only (default: true)
+    readonly = true
+    # Type of firmware - pflash is typically used for UEFI (default: "pflash")
+    type = "pflash"
+    # Enable secure boot (default: false)
+    secure = false
+  }
+  
+  # The old way (deprecated):
+  # firmware = "/usr/share/OVMF/OVMF_CODE.fd"
 
   nvram {
     # This is the file which will back the UEFI NVRAM content.

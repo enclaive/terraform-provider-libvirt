@@ -394,7 +394,47 @@ func setCmdlineArgs(d *schema.ResourceData, domainDef *libvirtxml.Domain) {
 }
 
 func setFirmware(d *schema.ResourceData, domainDef *libvirtxml.Domain) {
-	if firmware, ok := d.GetOk("firmware"); ok {
+	// First check for the new firmware_config block
+	if _, ok := d.GetOk("firmware_config.0"); ok {
+		path := d.Get("firmware_config.0.path").(string)
+		readonly := d.Get("firmware_config.0.readonly").(bool)
+		firmwareType := d.Get("firmware_config.0.type").(string)
+		secure := d.Get("firmware_config.0.secure").(bool)
+
+		// Convert boolean to yes/no string as expected by libvirt
+		readonlyStr := "no"
+		if readonly {
+			readonlyStr = "yes"
+		}
+
+		secureStr := "no"
+		if secure {
+			secureStr = "yes"
+		}
+
+		domainDef.OS.Loader = &libvirtxml.DomainLoader{
+			Path:     path,
+			Readonly: readonlyStr,
+			Type:     firmwareType,
+			Secure:   secureStr,
+		}
+
+		if _, ok := d.GetOk("nvram.0"); ok {
+			nvramFile := ""
+			if file, ok := d.GetOk("nvram.0.file"); ok {
+				nvramFile = file.(string)
+			}
+			nvramTemplateFile := ""
+			if nvramTemplate, ok := d.GetOk("nvram.0.template"); ok {
+				nvramTemplateFile = nvramTemplate.(string)
+			}
+			domainDef.OS.NVRam = &libvirtxml.DomainNVRam{
+				NVRam:    nvramFile,
+				Template: nvramTemplateFile,
+			}
+		}
+	// Fall back to the old firmware string if firmware_config is not set
+	} else if firmware, ok := d.GetOk("firmware"); ok {
 		firmwareFile := firmware.(string)
 		domainDef.OS.Loader = &libvirtxml.DomainLoader{
 			Path:     firmwareFile,

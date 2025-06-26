@@ -16,6 +16,7 @@ import (
 	"github.com/dmacvicar/terraform-provider-libvirt/libvirt/helper/suppress"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"libvirt.org/go/libvirtxml"
 )
 
@@ -71,9 +72,43 @@ func resourceLibvirtDomain() *schema.Resource {
 				ForceNew: true,
 			},
 			"firmware": {
-				Type:     schema.TypeString,
+				Type:       schema.TypeString,
+				Optional:   true,
+				ForceNew:   true,
+				Deprecated: "Use the 'firmware_config' block instead",
+			},
+			"firmware_config": {
+				Type:     schema.TypeList,
 				Optional: true,
 				ForceNew: true,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"path": {
+							Type:     schema.TypeString,
+							Required: true,
+							ForceNew: true,
+						},
+						"readonly": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							Default:  true,
+							ForceNew: true,
+						},
+						"type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Default:  "pflash",
+							ForceNew: true,
+						},
+						"secure": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							Default:  false,
+							ForceNew: true,
+						},
+					},
+				},
 			},
 			"type": {
 				Type:     schema.TypeString,
@@ -480,8 +515,252 @@ func resourceLibvirtDomain() *schema.Resource {
 					},
 				},
 			},
+			"launch_security": {
+				Type:     schema.TypeList,
+				Optional: true,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"type": {
+							Type:     schema.TypeString,
+							Required: true,
+							ValidateFunc: validation.StringInSlice([]string{
+								"sev", "sev-snp", "s390-pv",
+							}, false),
+							Description: "Launch security type (sev, sev-snp, or s390-pv)",
+						},
+						// SEV specific settings
+						"cbitpos": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "C-bit position for SEV",
+						},
+						"reduced_phys_bits": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "Reduced physical address bits for SEV",
+						},
+						"policy": {
+							Type:        schema.TypeInt,
+							Optional:    true,
+							Description: "Policy value for SEV",
+						},
+						"dh_cert": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Diffie-Hellman certificate for SEV",
+						},
+						"session": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Session information for SEV",
+						},
+						// SEV-SNP specific settings
+						"kernel_hashes": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Kernel hashes for SEV-SNP",
+						},
+						"author_key": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Author key for SEV-SNP",
+						},
+						"vcek": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "VCEK for SEV-SNP",
+						},
+						"guest_visible_workarounds": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Guest visible workarounds for SEV-SNP",
+						},
+						"id_block": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "ID block for SEV-SNP",
+						},
+						"id_auth": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "ID auth for SEV-SNP",
+						},
+						"host_data": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Host data for SEV-SNP",
+						},
+					},
+				},
+			},
+			"memory_backing": {
+				Type:     schema.TypeList,
+				Optional: true,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"source_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							ValidateFunc: validation.StringInSlice([]string{
+								"file", "anonymous", "memfd",
+							}, false),
+							Description: "Memory backing source type (file, anonymous, or memfd)",
+						},
+						"access_mode": {
+							Type:     schema.TypeString,
+							Optional: true,
+							ValidateFunc: validation.StringInSlice([]string{
+								"shared", "private",
+							}, false),
+							Description: "Memory access mode (shared or private)",
+						},
+						"allocation_mode": {
+							Type:     schema.TypeString,
+							Optional: true,
+							ValidateFunc: validation.StringInSlice([]string{
+								"immediate", "ondemand",
+							}, false),
+							Description: "Memory allocation mode (immediate or ondemand)",
+						},
+						"discard": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Description: "Enable memory discard",
+						},
+						"nosharepages": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Description: "Disable memory sharing between guests",
+						},
+						"locked": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Description: "Lock memory to prevent swapping",
+						},
+						"hugepages": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"size": {
+										Type:        schema.TypeInt,
+										Required:    true,
+										Description: "Huge page size in KiB",
+									},
+									"nodeset": {
+										Type:        schema.TypeString,
+										Optional:    true,
+										Description: "NUMA nodes to allocate huge pages from",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
+}
+
+func setLaunchSecurity(d *schema.ResourceData, domainDef *libvirtxml.Domain) error { //nolint:unparam // error return kept for future use
+	if launchSecurityList, ok := d.GetOk("launch_security"); ok {
+		if len(launchSecurityList.([]interface{})) > 0 {
+			launchSecurity := launchSecurityList.([]interface{})[0].(map[string]interface{})
+			secType := launchSecurity["type"].(string)
+
+			// Initialize the launch security element
+			domainDef.LaunchSecurity = &libvirtxml.DomainLaunchSecurity{}
+
+			switch secType {
+			case "sev":
+				sev := &libvirtxml.DomainLaunchSecuritySEV{}
+
+				if v, ok := launchSecurity["cbitpos"]; ok && v.(int) > 0 {
+					cbitpos := uint(v.(int))
+					sev.CBitPos = &cbitpos
+				}
+
+				if v, ok := launchSecurity["reduced_phys_bits"]; ok && v.(int) > 0 {
+					reducedPhysBits := uint(v.(int))
+					sev.ReducedPhysBits = &reducedPhysBits
+				}
+
+				if v, ok := launchSecurity["policy"]; ok && v.(int) > 0 {
+					policy := uint(v.(int))
+					sev.Policy = &policy
+				}
+
+				if v, ok := launchSecurity["dh_cert"]; ok {
+					sev.DHCert = v.(string)
+				}
+
+				if v, ok := launchSecurity["session"]; ok {
+					sev.Session = v.(string)
+				}
+
+				domainDef.LaunchSecurity.SEV = sev
+
+			case "sev-snp":
+				sevSnp := &libvirtxml.DomainLaunchSecuritySEVSNP{}
+
+				if v, ok := launchSecurity["kernel_hashes"]; ok {
+					sevSnp.KernelHashes = v.(string)
+				}
+
+				if v, ok := launchSecurity["author_key"]; ok {
+					sevSnp.AuthorKey = v.(string)
+				}
+
+				if v, ok := launchSecurity["vcek"]; ok {
+					sevSnp.VCEK = v.(string)
+				}
+
+				if v, ok := launchSecurity["cbitpos"]; ok && v.(int) > 0 {
+					cbitpos := uint(v.(int))
+					sevSnp.CBitPos = &cbitpos
+				}
+
+				if v, ok := launchSecurity["reduced_phys_bits"]; ok && v.(int) > 0 {
+					reducedPhysBits := uint(v.(int))
+					sevSnp.ReducedPhysBits = &reducedPhysBits
+				}
+
+				if v, ok := launchSecurity["policy"]; ok && v.(int) > 0 {
+					policy := uint64(v.(int))
+    				// Shift policy left by 16 bits to get proper policy in 64 bit format
+					const policyBitOffset = 16
+					fullPolicy := policy << policyBitOffset
+					sevSnp.Policy = &fullPolicy
+				}
+
+				if v, ok := launchSecurity["guest_visible_workarounds"]; ok {
+					sevSnp.GuestVisibleWorkarounds = v.(string)
+				}
+
+				if v, ok := launchSecurity["id_block"]; ok {
+					sevSnp.IDBlock = v.(string)
+				}
+
+				if v, ok := launchSecurity["id_auth"]; ok {
+					sevSnp.IDAuth = v.(string)
+				}
+
+				if v, ok := launchSecurity["host_data"]; ok {
+					sevSnp.HostData = v.(string)
+				}
+
+				domainDef.LaunchSecurity.SEVSNP = sevSnp
+
+			case "s390-pv":
+				// S390 Protected Virtualization doesn't have any additional parameters
+				domainDef.LaunchSecurity.S390PV = &libvirtxml.DomainLaunchSecurityS390PV{}
+			}
+		}
+	}
+
+	return nil
 }
 
 func resourceLibvirtDomainCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -558,6 +837,14 @@ func resourceLibvirtDomainCreate(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	if err := setCloudinit(d, &domainDef, virConn); err != nil {
+		return diag.FromErr(err)
+	}
+
+	if err := setMemoryBacking(d, &domainDef); err != nil {
+		return diag.FromErr(err)
+	}
+
+	if err := setLaunchSecurity(d, &domainDef); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -660,6 +947,83 @@ func resourceLibvirtDomainCreate(ctx context.Context, d *schema.ResourceData, me
 
 	if err := destroyDomainByUserRequest(virConn, d, domain); err != nil {
 		return diag.FromErr(err)
+	}
+
+	return nil
+}
+
+func setMemoryBacking(d *schema.ResourceData, domainDef *libvirtxml.Domain) error { //nolint:unparam // error return kept for future use
+	if memBackingList, ok := d.GetOk("memory_backing"); ok {
+		if len(memBackingList.([]interface{})) > 0 {
+			memBacking := memBackingList.([]interface{})[0].(map[string]interface{})
+
+			// Initialize the memory backing element if not present
+			if domainDef.MemoryBacking == nil {
+				domainDef.MemoryBacking = &libvirtxml.DomainMemoryBacking{}
+			}
+
+			// Set source type
+			if sourceType, ok := memBacking["source_type"].(string); ok && sourceType != "" {
+				if domainDef.MemoryBacking.MemorySource == nil {
+					domainDef.MemoryBacking.MemorySource = &libvirtxml.DomainMemorySource{}
+				}
+				domainDef.MemoryBacking.MemorySource.Type = sourceType
+			}
+
+			// Set access mode
+			if accessMode, ok := memBacking["access_mode"].(string); ok && accessMode != "" {
+				if domainDef.MemoryBacking.MemoryAccess == nil {
+					domainDef.MemoryBacking.MemoryAccess = &libvirtxml.DomainMemoryAccess{}
+				}
+				domainDef.MemoryBacking.MemoryAccess.Mode = accessMode
+			}
+
+			// Set allocation mode
+			if allocMode, ok := memBacking["allocation_mode"].(string); ok && allocMode != "" {
+				if domainDef.MemoryBacking.MemoryAllocation == nil {
+					domainDef.MemoryBacking.MemoryAllocation = &libvirtxml.DomainMemoryAllocation{}
+				}
+				domainDef.MemoryBacking.MemoryAllocation.Mode = allocMode
+			}
+
+			// Set discard
+			if discard, ok := memBacking["discard"].(bool); ok && discard {
+				domainDef.MemoryBacking.MemoryDiscard = &libvirtxml.DomainMemoryDiscard{}
+			}
+
+			// Set nosharepages
+			if nosharepages, ok := memBacking["nosharepages"].(bool); ok && nosharepages {
+				domainDef.MemoryBacking.MemoryNosharepages = &libvirtxml.DomainMemoryNosharepages{}
+			}
+
+			// Set locked
+			if locked, ok := memBacking["locked"].(bool); ok && locked {
+				domainDef.MemoryBacking.MemoryLocked = &libvirtxml.DomainMemoryLocked{}
+			}
+
+			// Set hugepages
+			if hugepagesList, ok := memBacking["hugepages"].([]interface{}); ok && len(hugepagesList) > 0 {
+				hugepages := &libvirtxml.DomainMemoryHugepages{
+					Hugepages: []libvirtxml.DomainMemoryHugepage{},
+				}
+
+				for _, hpInterface := range hugepagesList {
+					hp := hpInterface.(map[string]interface{})
+
+					hugepage := libvirtxml.DomainMemoryHugepage{
+						Size: uint(hp["size"].(int)),
+					}
+
+					if nodeset, ok := hp["nodeset"].(string); ok && nodeset != "" {
+						hugepage.Nodeset = nodeset
+					}
+
+					hugepages.Hugepages = append(hugepages.Hugepages, hugepage)
+				}
+
+				domainDef.MemoryBacking.MemoryHugePages = hugepages
+			}
+		}
 	}
 
 	return nil
@@ -824,7 +1188,17 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if domainDef.OS.Loader != nil {
+		// Set the old firmware string for backwards compatibility
 		d.Set("firmware", domainDef.OS.Loader.Path)
+		
+		// Set the new firmware_config block
+		firmwareConfig := map[string]interface{}{
+			"path": domainDef.OS.Loader.Path,
+			"type": domainDef.OS.Loader.Type,
+			"readonly": domainDef.OS.Loader.Readonly == "yes",
+			"secure": domainDef.OS.Loader.Secure == "yes",
+		}
+		d.Set("firmware_config", []map[string]interface{}{firmwareConfig})
 	}
 
 	if domainDef.OS.NVRam != nil {
@@ -965,6 +1339,107 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 
 	if len(filesystems) > 0 {
 		d.Set("filesystem", filesystems)
+	}
+
+	// Read launch security configuration
+	if domainDef.LaunchSecurity != nil {
+		launchSecurity := make(map[string]interface{})
+
+		if domainDef.LaunchSecurity.SEV != nil {
+			launchSecurity["type"] = "sev"
+
+			if domainDef.LaunchSecurity.SEV.CBitPos != nil {
+				launchSecurity["cbitpos"] = int(*domainDef.LaunchSecurity.SEV.CBitPos)
+			}
+
+			if domainDef.LaunchSecurity.SEV.ReducedPhysBits != nil {
+				launchSecurity["reduced_phys_bits"] = int(*domainDef.LaunchSecurity.SEV.ReducedPhysBits)
+			}
+
+			if domainDef.LaunchSecurity.SEV.Policy != nil {
+				launchSecurity["policy"] = int(*domainDef.LaunchSecurity.SEV.Policy)
+			}
+
+			launchSecurity["dh_cert"] = domainDef.LaunchSecurity.SEV.DHCert
+			launchSecurity["session"] = domainDef.LaunchSecurity.SEV.Session
+
+		} else if domainDef.LaunchSecurity.SEVSNP != nil {
+			launchSecurity["type"] = "sev-snp"
+
+			launchSecurity["kernel_hashes"] = domainDef.LaunchSecurity.SEVSNP.KernelHashes
+			launchSecurity["author_key"] = domainDef.LaunchSecurity.SEVSNP.AuthorKey
+			launchSecurity["vcek"] = domainDef.LaunchSecurity.SEVSNP.VCEK
+
+			if domainDef.LaunchSecurity.SEVSNP.CBitPos != nil {
+				launchSecurity["cbitpos"] = int(*domainDef.LaunchSecurity.SEVSNP.CBitPos)
+			}
+
+			if domainDef.LaunchSecurity.SEVSNP.ReducedPhysBits != nil {
+				launchSecurity["reduced_phys_bits"] = int(*domainDef.LaunchSecurity.SEVSNP.ReducedPhysBits)
+			}
+
+			if domainDef.LaunchSecurity.SEVSNP.Policy != nil {
+				launchSecurity["policy"] = int(*domainDef.LaunchSecurity.SEVSNP.Policy)
+			}
+
+			launchSecurity["guest_visible_workarounds"] = domainDef.LaunchSecurity.SEVSNP.GuestVisibleWorkarounds
+			launchSecurity["id_block"] = domainDef.LaunchSecurity.SEVSNP.IDBlock
+			launchSecurity["id_auth"] = domainDef.LaunchSecurity.SEVSNP.IDAuth
+			launchSecurity["host_data"] = domainDef.LaunchSecurity.SEVSNP.HostData
+
+		} else if domainDef.LaunchSecurity.S390PV != nil {
+			launchSecurity["type"] = "s390-pv"
+		}
+
+		d.Set("launch_security", []map[string]interface{}{launchSecurity})
+	}
+
+	// Read memory backing configuration
+	if domainDef.MemoryBacking != nil {
+		memBacking := make(map[string]interface{})
+
+		if domainDef.MemoryBacking.MemorySource != nil {
+			memBacking["source_type"] = domainDef.MemoryBacking.MemorySource.Type
+		}
+
+		if domainDef.MemoryBacking.MemoryAccess != nil {
+			memBacking["access_mode"] = domainDef.MemoryBacking.MemoryAccess.Mode
+		}
+
+		if domainDef.MemoryBacking.MemoryAllocation != nil {
+			memBacking["allocation_mode"] = domainDef.MemoryBacking.MemoryAllocation.Mode
+		}
+
+		if domainDef.MemoryBacking.MemoryDiscard != nil {
+			memBacking["discard"] = true
+		}
+
+		if domainDef.MemoryBacking.MemoryNosharepages != nil {
+			memBacking["nosharepages"] = true
+		}
+
+		if domainDef.MemoryBacking.MemoryLocked != nil {
+			memBacking["locked"] = true
+		}
+
+		if domainDef.MemoryBacking.MemoryHugePages != nil && len(domainDef.MemoryBacking.MemoryHugePages.Hugepages) > 0 {
+			hugepages := make([]map[string]interface{}, 0, len(domainDef.MemoryBacking.MemoryHugePages.Hugepages))
+
+			for _, hp := range domainDef.MemoryBacking.MemoryHugePages.Hugepages {
+				hugepage := make(map[string]interface{})
+				hugepage["size"] = hp.Size
+
+				if hp.Nodeset != "" {
+					hugepage["nodeset"] = hp.Nodeset
+				}
+
+				hugepages = append(hugepages, hugepage)
+			}
+
+			memBacking["hugepages"] = hugepages
+		}
+
+		d.Set("memory_backing", []map[string]interface{}{memBacking})
 	}
 
 	// lookup interfaces with addresses
