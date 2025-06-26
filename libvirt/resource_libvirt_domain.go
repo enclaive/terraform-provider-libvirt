@@ -1494,13 +1494,14 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 			"hostname":       "",
 			"wait_for_lease": false,
 			"filter" :        "",
-			"filter_parameters" : "",
+			"filter_parameters" : make(map[string]string),
 		}
 
 		netIface["wait_for_lease"] = d.Get(prefix + ".wait_for_lease").(bool)
 		netIface["hostname"] = d.Get(prefix + ".hostname").(string)
 		netIface["addresses"] = addressesForMac(mac)
 		log.Printf("[DEBUG] read: addresses for '%s': %+v", mac, netIface["addresses"])
+
 
 		if networkInterfaceDef.Source.Network != nil {
 			network, err := virConn.NetworkLookupByName(networkInterfaceDef.Source.Network.Network)
@@ -1519,9 +1520,10 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 			}
 
 			netIface["network_name"] = networkInterfaceDef.Source.Network.Network
+
 			if networkInterfaceDef.FilterRef != nil {
 				netIface["filter"] = networkInterfaceDef.FilterRef.Filter
-				
+					
 				if len(networkInterfaceDef.FilterRef.Parameters) > 0 {
 					params := make(map[string]string)
 					for _, param := range networkInterfaceDef.FilterRef.Parameters {
@@ -1530,7 +1532,6 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 					netIface["filter_parameters"] = params
 				}
 			}
-			
 			// try to look for this MAC in the DHCP configuration for this VM
 			if HasDHCP(networkDef) {
 			hostnameSearch:
@@ -1548,6 +1549,18 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 			}
 		} else if networkInterfaceDef.Source.Bridge != nil {
 			netIface["bridge"] = networkInterfaceDef.Source.Bridge.Bridge
+
+			if networkInterfaceDef.FilterRef != nil {
+				netIface["filter"] = networkInterfaceDef.FilterRef.Filter
+					
+				if len(networkInterfaceDef.FilterRef.Parameters) > 0 {
+					params := make(map[string]string)
+					for _, param := range networkInterfaceDef.FilterRef.Parameters {
+						params[param.Name] = param.Value
+					}
+					netIface["filter_parameters"] = params
+				}
+			}
 		} else if networkInterfaceDef.Source.Direct != nil {
 			switch networkInterfaceDef.Source.Direct.Mode {
 			case "vepa":
