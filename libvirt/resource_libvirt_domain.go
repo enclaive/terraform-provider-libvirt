@@ -663,6 +663,7 @@ func resourceLibvirtDomain() *schema.Resource {
 		},
 	}
 }
+//nolint:unparam // error return kept for future use and consistency with similar helpers
 
 func setLaunchSecurity(d *schema.ResourceData, domainDef *libvirtxml.Domain) error {
 	if launchSecurityList, ok := d.GetOk("launch_security"); ok {
@@ -730,7 +731,8 @@ func setLaunchSecurity(d *schema.ResourceData, domainDef *libvirtxml.Domain) err
 				if v, ok := launchSecurity["policy"]; ok && v.(int) > 0 {
 					policy := uint64(v.(int))
     				// Shift policy left by 16 bits to get proper policy in 64 bit format
-					fullPolicy := policy << 16
+					const policyBitOffset = 16
+					fullPolicy := policy << policyBitOffset
 					sevSnp.Policy = &fullPolicy
 				}
 
@@ -951,6 +953,7 @@ func resourceLibvirtDomainCreate(ctx context.Context, d *schema.ResourceData, me
 	return nil
 }
 
+//nolint:unparam // error return kept for future use and consistency with similar helpers
 func setMemoryBacking(d *schema.ResourceData, domainDef *libvirtxml.Domain) error {
 	if memBackingList, ok := d.GetOk("memory_backing"); ok {
 		if len(memBackingList.([]interface{})) > 0 {
