@@ -375,6 +375,10 @@ resource "libvirt_domain" "domain1" {
     addresses      = ["10.17.3.3"]
     mac            = "AA:BB:CC:11:22:22"
     wait_for_lease = true
+    filter         = "clean_traffic"
+    filter_parameters = {
+    IP = "10.0.0.5"
+    }
   }
 }
 ```
@@ -395,6 +399,13 @@ When using a virtual network, users can specify:
 * `wait_for_lease`- (Optional boolean) When creating the domain resource, wait until the
   network interface gets a DHCP lease from libvirt, so that the computed IP
   addresses will be available when the domain is up and the plan applied.
+* `filter` - (Optional) The name of a libvirt network filter (nwfilter) to apply
+on this interface. Network filters can be used to restrict or shape network
+traffic, for example by preventing MAC or IP spoofing.
+* `filter_parameters` - (Optional) A map of parameters to customize the behavior
+of the network filter. For example, specifying the expected IP address for
+anti-spoofing.
+**Note:** Currently, network filters must be created manually using libvirt tools or XML configurations. Terraform support to create and manage nwfilters directly is planned for a future release.
 
 When connecting to a LAN, users can specify a target device with:
 

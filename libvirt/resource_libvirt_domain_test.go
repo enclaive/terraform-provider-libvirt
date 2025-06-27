@@ -2030,3 +2030,31 @@ func TestAccLibvirtDomain_FirmwareConfig(t *testing.T) {
 		},
 	})
 }
+
+func TestAccLibvirtDomain_NetworkFilter(t *testing.T) {
+    resource.Test(t, resource.TestCase{
+        PreCheck:     func() { testAccPreCheck(t) },
+        Providers:    testAccProviders,
+        CheckDestroy: testAccCheckLibvirtDomainDestroy,
+        Steps: []resource.TestStep{
+            {
+                Config: `
+                resource "libvirt_domain" "acceptance-test-filter" {
+                    name = "terraform-test-filter"
+                    network_interface {
+                        filter = "clean-traffic"
+                        filter_parameters = {
+                            IP = "10.0.0.1"
+                        }
+                    }
+                }
+                `,
+                Check: resource.ComposeTestCheckFunc(
+                    testAccCheckLibvirtDomainExists("libvirt_domain.acceptance-test-filter", &libvirt.Domain{}),
+                    resource.TestCheckResourceAttr("libvirt_domain.acceptance-test-filter", "network_interface.0.filter", "clean-traffic"),
+                    resource.TestCheckResourceAttr("libvirt_domain.acceptance-test-filter", "network_interface.0.filter_parameters.IP", "10.0.0.1"),
+                ),
+            },
+        },
+    })
+}
