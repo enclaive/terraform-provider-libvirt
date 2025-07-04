@@ -284,6 +284,17 @@ func resourceLibvirtDomain() *schema.Resource {
 								Type: schema.TypeString,
 							},
 						},
+						"filter": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Description: "Name of the existing nwfilter to apply to this interface",
+						},
+						"filter_parameters": {
+							Type:     schema.TypeMap,
+							Optional: true,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+							Description: "Optional parameters for the nwfilter",
+						},
 					},
 				},
 			},
@@ -852,6 +863,9 @@ func resourceLibvirtDomainCreate(ctx context.Context, d *schema.ResourceData, me
 	partialNetIfaces := make(map[string]*pendingMapping, d.Get("network_interface.#").(int))
 
 	if err := setNetworkInterfaces(d, &domainDef, virConn, partialNetIfaces, &waitForLeases); err != nil {
+		return diag.FromErr(err)
+	}
+	if err := setNetworkFilters(d, &domainDef); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -1479,6 +1493,8 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 			"mac":            mac,
 			"hostname":       "",
 			"wait_for_lease": false,
+			"filter" :        "",
+			"filter_parameters" : make(map[string]string),
 		}
 
 		netIface["wait_for_lease"] = d.Get(prefix + ".wait_for_lease").(bool)
@@ -1503,7 +1519,17 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 			}
 
 			netIface["network_name"] = networkInterfaceDef.Source.Network.Network
+			if networkInterfaceDef.FilterRef != nil {
+				netIface["filter"] = networkInterfaceDef.FilterRef.Filter
 
+				if len(networkInterfaceDef.FilterRef.Parameters) > 0 {
+					params := make(map[string]string)
+					for _, param := range networkInterfaceDef.FilterRef.Parameters {
+						params[param.Name] = param.Value
+					}
+					netIface["filter_parameters"] = params
+				}
+			}
 			// try to look for this MAC in the DHCP configuration for this VM
 			if HasDHCP(networkDef) {
 			hostnameSearch:
@@ -1521,6 +1547,17 @@ func resourceLibvirtDomainRead(ctx context.Context, d *schema.ResourceData, meta
 			}
 		} else if networkInterfaceDef.Source.Bridge != nil {
 			netIface["bridge"] = networkInterfaceDef.Source.Bridge.Bridge
+			if networkInterfaceDef.FilterRef != nil {
+				netIface["filter"] = networkInterfaceDef.FilterRef.Filter
+
+				if len(networkInterfaceDef.FilterRef.Parameters) > 0 {
+					params := make(map[string]string)
+					for _, param := range networkInterfaceDef.FilterRef.Parameters {
+						params[param.Name] = param.Value
+					}
+					netIface["filter_parameters"] = params
+				}
+			}
 		} else if networkInterfaceDef.Source.Direct != nil {
 			switch networkInterfaceDef.Source.Direct.Mode {
 			case "vepa":
@@ -1603,5 +1640,36 @@ func resourceLibvirtDomainDelete(ctx context.Context, d *schema.ResourceData, me
 		}
 	}
 
+	return nil
+}
+
+func setNetworkFilters(d *schema.ResourceData, domainDef *libvirtxml.Domain) error { //nolint:unparam
+	if _, ok := d.GetOk("launch_security"); ok {
+		for i := 0; i < d.Get("network_interface.#").(int); i++ {
+			prefix := fmt.Sprintf("network_interface.%d", i)
+
+			if filterName, ok := d.GetOk(prefix + ".filter"); ok {
+				ifaceIndex := len(domainDef.Devices.Interfaces) - d.Get("network_interface.#").(int) + i
+				if ifaceIndex < 0 || ifaceIndex >= len(domainDef.Devices.Interfaces) {
+					continue
+				}
+
+				filter := &libvirtxml.DomainInterfaceFilterRef{
+					Filter: filterName.(string),
+				}
+
+				if params, ok := d.GetOk(prefix + ".filter_parameters"); ok {
+					for k, v := range params.(map[string]interface{}) {
+						filter.Parameters = append(filter.Parameters, libvirtxml.DomainInterfaceFilterParam{
+							Name:  k,
+							Value: v.(string),
+						})
+					}
+				}
+
+				domainDef.Devices.Interfaces[ifaceIndex].FilterRef = filter
+			}
+		}
+	}
 	return nil
 }
